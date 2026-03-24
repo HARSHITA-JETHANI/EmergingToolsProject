@@ -11,6 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
+import plotly.express as px
 
 # ── RAG imports (TF-IDF based, no internet needed) ──────────────────────────
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -581,6 +582,11 @@ def display_result(result, answer, explanation):
     return stored
 
 
+# ================= AI SMART DASHBOARD BUTTON (ALWAYS VISIBLE) =================
+st.markdown("## 🧠 AI Smart Dashboard")
+generate_dashboard = st.button("🚀 Generate Smart Dashboard")
+
+
 # ================= MAIN =================
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
@@ -602,17 +608,73 @@ if uploaded_file:
         n_docs = len(st.session_state.rag_index[2])
         st.sidebar.markdown(f"**🗂 RAG index:** {n_docs} documents")
 
+    # Preview
     with st.expander("🔍 Dataset Preview"):
         st.dataframe(df.head(), use_container_width=True)
 
     st.markdown("---")
 
-    # Chat history
+    # ---------------- DASHBOARD LOGIC ----------------
+    if generate_dashboard:
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Rows", df.shape[0])
+        col2.metric("Columns", df.shape[1])
+        col3.metric("Missing Values", int(df.isnull().sum().sum()))
+
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+
+        if numeric_cols:
+            selected_col = st.selectbox("📊 Select Column for Analysis", numeric_cols)
+
+            fig = px.histogram(
+                df,
+                x=selected_col,
+                nbins=30,
+                title=f"Distribution of {selected_col}",
+                color_discrete_sequence=["#cdb4db"]
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            fig2 = px.box(
+                df,
+                y=selected_col,
+                title=f"Outlier Detection for {selected_col}",
+                color_discrete_sequence=["#ffc8dd"]
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+            st.markdown("### 🧠 AI Insights")
+
+            query = f"Analyze column {selected_col} and give insights"
+            context, docs = retrieve_context(query)
+
+            insight_prompt = f"""
+            Column: {selected_col}
+            Context:
+            {context}
+
+            Give 3 short insights about this column.
+            """
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": insight_prompt}]
+            )
+
+            insights = response.choices[0].message.content
+            st.success(insights)
+
+        else:
+            st.warning("No numeric columns available for visualization.")
+
+    # ---------------- CHAT ----------------
+    st.markdown("## 💬 Ask Questions")
+
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             render_message(msg)
 
-    # User input
     user_query = st.chat_input("Ask anything about your dataset...")
 
     if user_query:
@@ -629,17 +691,10 @@ if uploaded_file:
                 new_msgs = display_result(result, answer, explanation)
                 st.session_state.messages.extend(new_msgs)
 
+
+# ---------------- NO DATA CASE ----------------
 else:
+    if generate_dashboard:
+        st.warning("⚠️ Upload a dataset first to use the dashboard.")
+
     st.info("👈 Upload a CSV file from the sidebar to get started.")
-    st.markdown("""
-**What you can ask:**
-- Show me the first few rows
-- Which columns have missing values?
-- Plot a histogram of `Data_value`
-- Show the correlation heatmap
-- Which column has the most outliers?
-- Show me the data types
-- Boxplot of `Data_value`
-- Which feature has the highest variance?
-- Show value counts for `Series_title_1`
-""")
