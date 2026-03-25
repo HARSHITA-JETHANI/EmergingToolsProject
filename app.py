@@ -584,15 +584,18 @@ def display_result(result, answer, explanation):
 
 # ================= AI SMART DASHBOARD BUTTON (ALWAYS VISIBLE) =================
 st.markdown("## 🧠 AI Smart Dashboard")
-generate_dashboard = st.button("🚀 Generate Smart Dashboard")
+if "dashboard_on" not in st.session_state:
+    st.session_state.dashboard_on = False
 
+if st.button("🚀 Generate Smart Dashboard"):
+    st.session_state.dashboard_on = True
 
 # ================= MAIN =================
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
     # Build / refresh RAG index only when dataset changes
-    df_hash = str(df.shape) + str(list(df.columns))
+    df_hash = str(df.shape) + str(df.columns.tolist()) + str(df.head().to_json())
     if st.session_state.df_hash != df_hash:
         with st.spinner("🔍 Building semantic search index..."):
             st.session_state.rag_index = build_rag_index(df)
@@ -615,7 +618,8 @@ if uploaded_file:
     st.markdown("---")
 
     # ---------------- DASHBOARD LOGIC ----------------
-    if generate_dashboard:
+    # ---------------- DASHBOARD LOGIC ----------------
+    if st.session_state.dashboard_on:
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Rows", df.shape[0])
@@ -625,8 +629,14 @@ if uploaded_file:
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
 
         if numeric_cols:
-            selected_col = st.selectbox("📊 Select Column for Analysis", numeric_cols)
 
+            selected_col = st.selectbox(
+                "📊 Select Column for Analysis",
+                numeric_cols,
+                key="selected_column"
+            )
+
+            # ================= HISTOGRAM =================
             fig = px.histogram(
                 df,
                 x=selected_col,
@@ -634,16 +644,55 @@ if uploaded_file:
                 title=f"Distribution of {selected_col}",
                 color_discrete_sequence=["#cdb4db"]
             )
-            st.plotly_chart(fig, use_container_width=True)
 
+            fig.update_layout(
+                height=350,
+                margin=dict(l=20, r=20, t=40, b=20),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+            )
+
+            # ✅ internal grid (clean)
+            fig.update_xaxes(showgrid=True, gridcolor="#e6e6e6")
+            fig.update_yaxes(showgrid=True, gridcolor="#e6e6e6")
+
+            # ✅ bin separation
+            fig.update_traces(
+                marker_line_color="white",
+                marker_line_width=1.2,
+                opacity=0.9
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"hist_{selected_col}"
+            )
+
+            # ================= BOXPLOT =================
             fig2 = px.box(
                 df,
                 y=selected_col,
                 title=f"Outlier Detection for {selected_col}",
                 color_discrete_sequence=["#ffc8dd"]
             )
-            st.plotly_chart(fig2, use_container_width=True)
 
+            fig2.update_layout(
+                height=350,
+                margin=dict(l=20, r=20, t=40, b=20),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+            )
+
+            fig2.update_yaxes(showgrid=True, gridcolor="#e6e6e6")
+
+            st.plotly_chart(
+                fig2,
+                use_container_width=True,
+                key=f"box_{selected_col}"
+            )
+
+            # ================= AI INSIGHTS =================
             st.markdown("### 🧠 AI Insights")
 
             query = f"Analyze column {selected_col} and give insights"
@@ -657,10 +706,11 @@ if uploaded_file:
             Give 3 short insights about this column.
             """
 
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": insight_prompt}]
-            )
+            with st.spinner("🤖 Generating insights..."):
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": insight_prompt}]
+                )
 
             insights = response.choices[0].message.content
             st.success(insights)
@@ -668,33 +718,9 @@ if uploaded_file:
         else:
             st.warning("No numeric columns available for visualization.")
 
-    # ---------------- CHAT ----------------
-    st.markdown("## 💬 Ask Questions")
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            render_message(msg)
-
-    user_query = st.chat_input("Ask anything about your dataset...")
-
-    if user_query:
-        st.session_state.messages.append(
-            {"role": "user", "type": "text", "content": user_query}
-        )
-        with st.chat_message("user"):
-            st.markdown(user_query)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking like a data scientist... 🤖"):
-                plan   = get_plan(user_query, df)
-                result, answer, explanation = safe_execute(plan, df)
-                new_msgs = display_result(result, answer, explanation)
-                st.session_state.messages.extend(new_msgs)
-
-
 # ---------------- NO DATA CASE ----------------
 else:
-    if generate_dashboard:
-        st.warning("⚠️ Upload a dataset first to use the dashboard.")
+    if st.session_state.dashboard_on:
+       st.warning("⚠️ Upload a dataset first to use the dashboard.")
 
     st.info("👈 Upload a CSV file from the sidebar to get started.")
