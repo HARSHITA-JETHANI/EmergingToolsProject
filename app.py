@@ -585,6 +585,7 @@ def display_result(result, answer, explanation):
 
 
 # ================= AI SMART DASHBOARD BUTTON (ALWAYS VISIBLE) =================
+
 st.markdown("## 🧠 AI Smart Dashboard")
 
 if "dashboard_on" not in st.session_state:
@@ -592,7 +593,6 @@ if "dashboard_on" not in st.session_state:
 
 if st.button("🚀 Generate Smart Dashboard"):
     st.session_state.dashboard_on = True
-
 
 # ================= MAIN =================
 if uploaded_file:
@@ -649,8 +649,31 @@ if uploaded_file:
                 title=f"Distribution of {selected_col}",
                 color_discrete_sequence=["#cdb4db"]
             )
-            fig.update_layout(height=350, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+
+            fig.update_layout(
+                height=350,
+                margin=dict(l=20, r=20, t=40, b=20),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+            )
+
+            # ✅ internal grid (clean)
+            fig.update_xaxes(showgrid=True, gridcolor="#e6e6e6")
+            fig.update_yaxes(showgrid=True, gridcolor="#e6e6e6")
+
+            # ✅ bin separation
+            fig.update_traces(
+                marker_line_color="white",
+                marker_line_width=1.2,
+                opacity=0.9
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"hist_{selected_col}"
+            )
+
 
             # Boxplot
             fig2 = px.box(
@@ -659,8 +682,21 @@ if uploaded_file:
                 title=f"Outlier Detection for {selected_col}",
                 color_discrete_sequence=["#ffc8dd"]
             )
-            fig2.update_layout(height=350, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig2, use_container_width=True)
+
+            fig2.update_layout(
+                height=350,
+                margin=dict(l=20, r=20, t=40, b=20),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+            )
+
+            fig2.update_yaxes(showgrid=True, gridcolor="#e6e6e6")
+
+            st.plotly_chart(
+                fig2,
+                use_container_width=True,
+                key=f"box_{selected_col}"
+            )
 
             # AI Insights
             st.markdown("### 🧠 AI Insights")
